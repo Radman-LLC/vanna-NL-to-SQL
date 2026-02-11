@@ -113,7 +113,7 @@ class AuditConfig(BaseModel):
 class AgentConfig(BaseModel):
     """Configuration for agent behavior."""
 
-    max_tool_iterations: int = Field(default=10, gt=0)
+    max_tool_iterations: int = Field(default=20, gt=0)
     stream_responses: bool = Field(default=True)
     auto_save_conversations: bool = Field(default=True)
     include_thinking_indicators: bool = Field(default=True)

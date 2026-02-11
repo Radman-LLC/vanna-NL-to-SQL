@@ -20,6 +20,10 @@ chroma.sqlite3
 milvus.db
 .milvus.db.lock
 
+# Vanna temp data (query result CSVs, chart artifacts)
+vanna_data/
+claude_data/
+
 # Frontend builds and dependencies
 frontends/**/node_modules/
 frontends/**/static/
