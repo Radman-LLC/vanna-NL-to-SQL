@@ -274,9 +274,14 @@ class ToolRegistry:
             return result
         except Exception as e:
             msg = f"Execution failed: {str(e)}"
-            return ToolResult(
+            result = ToolResult(
                 success=False,
                 result_for_llm=msg,
                 ui_component=None,
                 error=msg,
             )
+            # Populate metadata so lifecycle hooks (e.g. QueryLoggingHook)
+            # can still log failed executions for debugging
+            result.metadata["tool_name"] = tool_call.name
+            result.metadata["arguments"] = tool_call.arguments
+            return result
