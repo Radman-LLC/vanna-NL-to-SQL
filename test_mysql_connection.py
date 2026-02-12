@@ -175,7 +175,7 @@ async def test_vanna_agent():
     from vanna.core.system_prompt import DefaultSystemPromptBuilder
     from vanna.core.user import UserResolver, User, RequestContext
     from vanna.integrations.anthropic import AnthropicLlmService
-    from vanna.integrations.local.agent_memory import DemoAgentMemory
+    from vanna.integrations.chromadb import ChromaAgentMemory
     from vanna.integrations.mysql import ReadOnlyMySQLRunner
     from vanna.tools import RunSqlTool
 
@@ -239,11 +239,17 @@ async def test_vanna_agent():
                 group_memberships=["admin"],
             )
 
+    # Use persistent ChromaDB memory for testing — same as production
+    agent_memory = ChromaAgentMemory(
+        persist_directory="./vanna_memory",
+        collection_name="mysql_queries"
+    )
+
     agent = Agent(
         llm_service=llm,
         tool_registry=tools,
         user_resolver=SimpleUserResolver(),
-        agent_memory=DemoAgentMemory(),  # In-memory demo store — no persistence
+        agent_memory=agent_memory,
         config=AgentConfig(stream_responses=False),
         # Override the default system prompt with our read-only version
         system_prompt_builder=DefaultSystemPromptBuilder(

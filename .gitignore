@@ -24,6 +24,11 @@ milvus.db
 vanna_data/
 claude_data/
 
+# Vanna agent memory and logs
+vanna_memory/
+vanna_query_log.jsonl
+successful_queries.json
+
 # Frontend builds and dependencies
 frontends/**/node_modules/
 frontends/**/static/
