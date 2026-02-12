@@ -3,7 +3,9 @@
     "allow": [
       "WebFetch(domain:vanna.ai)",
       "Bash(python run_web_ui.py:*)",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(python -m training.sample_query_library:*)",
+      "Bash(git add:*)"
     ]
   }
 }

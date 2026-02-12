@@ -151,43 +151,43 @@ jobs:
               labels: ['Documented']
             });
 
-  request-claude-review:
-    needs: external-documentation
-    # Only request review when documentation was actually processed.
-    # This prevents duplicate review comments on every push — reviews
-    # are only requested when the documentation jobs ran successfully.
-    # if: needs.external-documentation.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Post review comment
-        env:
-          ADR_GH_TOKEN: ${{ secrets.ADR_GH_TOKEN }}
-        run: |
-          set -euo pipefail
-          ORG="${{ github.repository_owner }}"
-          REPO_NAME="${{ github.event.repository.name }}"
-          PR_NUMBER="${{ github.event.pull_request.number }}"
+  # request-claude-review:
+  #   needs: external-documentation
+  #   # Only request review when documentation was actually processed.
+  #   # This prevents duplicate review comments on every push — reviews
+  #   # are only requested when the documentation jobs ran successfully.
+  #   # if: needs.external-documentation.result == 'success'
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     pull-requests: write
+  #   steps:
+  #     - name: Post review comment
+  #       env:
+  #         ADR_GH_TOKEN: ${{ secrets.ADR_GH_TOKEN }}
+  #       run: |
+  #         set -euo pipefail
+  #         ORG="${{ github.repository_owner }}"
+  #         REPO_NAME="${{ github.event.repository.name }}"
+  #         PR_NUMBER="${{ github.event.pull_request.number }}"
 
-          if [ -z "$ADR_GH_TOKEN" ]; then
-            echo "❌ ADR_GH_TOKEN is not set"
-            exit 1
-          fi
+  #         if [ -z "$ADR_GH_TOKEN" ]; then
+  #           echo "❌ ADR_GH_TOKEN is not set"
+  #           exit 1
+  #         fi
 
-          # Authenticate with PAT so the comment triggers the Claude Code workflow
-          if ! echo "$ADR_GH_TOKEN" | gh auth login --with-token 2>&1; then
-            echo "❌ Authentication failed"
-            exit 1
-          fi
+  #         # Authenticate with PAT so the comment triggers the Claude Code workflow
+  #         if ! echo "$ADR_GH_TOKEN" | gh auth login --with-token 2>&1; then
+  #           echo "❌ Authentication failed"
+  #           exit 1
+  #         fi
 
-          echo "💬 Posting review request on PR #$PR_NUMBER..."
-          gh pr comment "$PR_NUMBER" \
-            --repo "$ORG/$REPO_NAME" \
-            --body "@claude run /pr-review-toolkit:review-pr"
-          echo "✅ Review comment posted on PR #$PR_NUMBER"
+  #         echo "💬 Posting review request on PR #$PR_NUMBER..."
+  #         gh pr comment "$PR_NUMBER" \
+  #           --repo "$ORG/$REPO_NAME" \
+  #           --body "@claude run /pr-review-toolkit:review-pr"
+  #         echo "✅ Review comment posted on PR #$PR_NUMBER"
 
-          echo "## ✅ Claude Review Requested" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**PR:** [#${PR_NUMBER}](https://github.com/${ORG}/${REPO_NAME}/pull/${PR_NUMBER})" >> "$GITHUB_STEP_SUMMARY"
+  #         echo "## ✅ Claude Review Requested" >> "$GITHUB_STEP_SUMMARY"
+  #         echo "" >> "$GITHUB_STEP_SUMMARY"
+  #         echo "**PR:** [#${PR_NUMBER}](https://github.com/${ORG}/${REPO_NAME}/pull/${PR_NUMBER})" >> "$GITHUB_STEP_SUMMARY"

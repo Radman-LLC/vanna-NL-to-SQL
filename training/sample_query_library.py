@@ -33,6 +33,28 @@ TRAINING_PAIRS = [
     # Generated from ADR/Zangerine production database schema
     # ═══════════════════════════════════════════════════════════════
 
+    # Pattern 0: Order Status JOIN (Best Practice)
+    {
+        "question": "Show me all orders with their status names from last month",
+        "sql": """
+            SELECT
+                o.`id` AS order_id,
+                o.`time` AS created_at,
+                o.`invoice_date`,
+                o.`total`,
+                os.`title` AS status_name,
+                TRIM(CONCAT(c.`fname`, ' ', c.`lname`)) AS customer_name
+            FROM `orders` o
+            INNER JOIN `order_status` os ON o.`status` = os.`id`
+            INNER JOIN `customers` c ON o.`customer_id` = c.`id`
+            WHERE o.`invoice_date` >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
+              AND o.`invoice_date` < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            ORDER BY o.`invoice_date` DESC
+        """,
+        "category": "aggregation",
+        "notes": "ALWAYS JOIN order_status to get status titles (os.title). NEVER use CASE statements with hardcoded status names - they vary by client."
+    },
+
     # Pattern 1: Total Sales by Date Range
     {
         "question": "What were the total sales last month?",
@@ -498,6 +520,391 @@ TRAINING_PAIRS = [
         """,
         "category": "financial",
         "notes": "Commissions are grouped by commission_period which has a sales_rep_user and cutoff_date."
+    },
+
+    # ═══════════════════════════════════════════════════════════════
+    # REPORT-SPECIFIC QUERIES
+    # From nl-to-sql-training-data-response-reports.md Section 4
+    # Added: 2025-02-11
+    # ═══════════════════════════════════════════════════════════════
+
+    # Revenue Performance Report - Q1
+    {
+        "question": "Show me monthly order count and revenue by status for this year",
+        "sql": """
+            SELECT
+                YEAR(`invoice_date`) AS `year`,
+                MONTH(`invoice_date`) AS `month`,
+                os.`title` AS `status_label`,
+                COUNT(*) AS `order_count`,
+                COALESCE(SUM(`total`), 0) AS `revenue`
+            FROM `orders` o
+            INNER JOIN `order_status` os ON o.`status` = os.`id`
+            WHERE `invoice_date` >= DATE_FORMAT(CURDATE(), '%Y-01-01')
+              AND `invoice_date` <= DATE_FORMAT(CURDATE(), '%Y-12-31 23:59:59')
+              AND (`status` = 2 OR `status` = 3 OR `status` = 4)
+            GROUP BY `year`, `month`, `status_label`
+            ORDER BY `year`, `month`
+        """,
+        "category": "revenue_performance",
+        "notes": "Use invoice_date for revenue reports. Filter by Completed(2), Invoiced(3), Shipped(4). Group by Year-Month."
+    },
+
+    # Revenue Performance Report - Q2
+    {
+        "question": "Show revenue performance by creation date for Q1 2025",
+        "sql": """
+            SELECT
+                YEAR(`time`) AS `year`,
+                MONTH(`time`) AS `month`,
+                COUNT(*) AS `order_count`,
+                COALESCE(SUM(`total`), 0) AS `revenue`
+            FROM `orders`
+            WHERE `time` >= '2025-01-01 00:00:00'
+              AND `time` <= '2025-03-31 23:59:59'
+              AND (`status` = 2 OR `status` = 3)
+            GROUP BY `year`, `month`
+            ORDER BY `year`, `month`
+        """,
+        "category": "revenue_performance",
+        "notes": "Alternative to invoice_date filtering - uses time (creation date) instead. Useful when invoice_date is NULL."
+    },
+
+    # JBD Commission Report - Q3
+    {
+        "question": "Find all paid orders from Q1 2025 for JBD commission calculation",
+        "sql": """
+            SELECT
+                tl.`type_id` AS `order_id`,
+                o.`customer_id`,
+                cc.`name` AS `company_name`,
+                o.`invoice_date`
+            FROM `transaction_log` tl
+            INNER JOIN `orders` o ON tl.`type_id` = o.`id`
+            INNER JOIN `customers` c ON o.`customer_id` = c.`id`
+            LEFT JOIN `customer_companies` cc ON c.`company_id` = cc.`id`
+            WHERE tl.`type` = 'order'
+              AND tl.`time` >= '2025-01-01 00:00:00'
+              AND tl.`time` <= '2025-03-31 23:59:59'
+              AND o.`status` != 1
+              AND o.`status` != 10
+            GROUP BY tl.`type_id`
+            HAVING (o.`total` - COALESCE(SUM(
+                CASE WHEN tl.`status` = 2 THEN tl.`amount` ELSE 0 END
+            ), 0)) = 0
+            ORDER BY cc.`name`
+        """,
+        "category": "jbd_commission",
+        "notes": "Paid order = balance is exactly 0. Transaction status 2 = Succeeded. Exclude ABANDONED(1) and QUOTE(10)."
+    },
+
+    # JBD Commission Report - Q4
+    {
+        "question": "Get order line items with customer product pricing for commission calculation",
+        "sql": """
+            SELECT
+                od.`id` AS `order_detail_id`,
+                od.`qty` AS `quantity`,
+                od.`price`,
+                od.`costs` AS `cost`,
+                p.`sku`,
+                od.`product_name`,
+                xrcp.`price` AS `customer_product_price`,
+                xrcp.`id` AS `customer_product_id`
+            FROM `orders_details` od
+            INNER JOIN `products` p ON od.`real_product_id` = p.`id`
+            LEFT JOIN `x_rewards_customer_products` xrcp
+                ON xrcp.`customer_id` = 12345
+                AND xrcp.`product_id` = p.`id`
+                AND xrcp.`deleted_by_user_id` IS NULL
+            WHERE od.`order_id` = 67890
+        """,
+        "category": "jbd_commission",
+        "notes": "Filter deleted_by_user_id IS NULL for active customer products. Uses x_rewards_customer_products for customer-specific pricing."
+    },
+
+    # JBD Commission Report - Q5
+    {
+        "question": "Get reward amounts per profile for a customer product",
+        "sql": """
+            SELECT
+                `profile_id`,
+                `reward_amount`
+            FROM `x_rewards_customer_product_reward_amounts`
+            WHERE `customer_product_id` = 12345
+        """,
+        "category": "jbd_commission",
+        "notes": "Each customer product can have different reward amounts per profile. Used to calculate net price for commission."
+    },
+
+    # JBD Commission Report - Q6
+    {
+        "question": "Get the custom JBD commission rate for a company",
+        "sql": """
+            SELECT `value`
+            FROM `custom_fields`
+            WHERE `type` = 'customer_company'
+              AND `type_id` = 12345
+              AND `name` = 'custom_jbd_commission_rate'
+        """,
+        "category": "jbd_commission",
+        "notes": "JBD commission rates are stored as custom fields on customer_companies. EAV pattern for flexible field storage."
+    },
+
+    # Commission Report - Q7
+    {
+        "question": "Show me commission details for all sales reps between January and March 2025",
+        "sql": """
+            SELECT
+                c.`id`,
+                c.`commission_date`,
+                c.`quantity`,
+                c.`commission_price`,
+                c.`commission_percent`,
+                c.`unit_commission`,
+                c.`amount`,
+                c.`order_id`,
+                c.`order_detail_id`,
+                c.`rma_detail_id`,
+                c.`category_id`,
+                cp.`sales_rep_user_id`,
+                cc.`label` AS `category_label`
+            FROM `commissions` c
+            INNER JOIN `commission_periods` cp ON c.`commission_period_id` = cp.`id`
+            INNER JOIN `commission_categories` cc ON c.`category_id` = cc.`id`
+            WHERE c.`commission_date` >= '2025-01-01'
+              AND c.`commission_date` <= '2025-03-31'
+            ORDER BY c.`order_id`
+        """,
+        "category": "commission_report",
+        "notes": "Commissions link to commission_periods for sales rep. commission_categories has SALE(1) and QUOTA(2)."
+    },
+
+    # Commission Report - Q8
+    {
+        "question": "Sum commission percentages per order detail for contribution calculation",
+        "sql": """
+            SELECT
+                `order_detail_id`,
+                SUM(`commission_percent`) AS `total_percent`
+            FROM `commissions`
+            WHERE `order_detail_id` IN (123, 456, 789)
+            GROUP BY `order_detail_id`
+        """,
+        "category": "commission_report",
+        "notes": "Used in Sales by Reps report to calculate each rep's contribution percentage when multiple reps share an order."
+    },
+
+    # Reward Liability Report - Q9
+    {
+        "question": "Calculate unredeemed reward liability opening balance before March 2025",
+        "sql": """
+            SELECT
+                COALESCE(SUM(`amount`), 0) AS `opening_liability`
+            FROM `x_rewards_rewards`
+            WHERE `created_at` < '2025-03-01 00:00:00'
+              AND `is_void` = 0
+              AND `redemption_period_id` IS NULL
+        """,
+        "category": "reward_liability",
+        "notes": "is_void=0 excludes voided rewards. redemption_period_id IS NULL means unredeemed. This is the liability balance."
+    },
+
+    # Reward Liability Report - Q10
+    {
+        "question": "Show reward liability by customer for Q1 2025",
+        "sql": """
+            SELECT
+                xrp.`customer_id`,
+                c.`fname` AS `first_name`,
+                c.`lname` AS `last_name`,
+                cc.`name` AS `company_name`,
+                COALESCE(SUM(xrr.`amount`), 0) AS `liability_amount`,
+                COUNT(xrr.`id`) AS `reward_count`
+            FROM `x_rewards_rewards` xrr
+            INNER JOIN `x_rewards_profiles` xrp ON xrr.`profile_id` = xrp.`id`
+            INNER JOIN `customers` c ON xrp.`customer_id` = c.`id`
+            LEFT JOIN `customer_companies` cc ON c.`company_id` = cc.`id`
+            WHERE xrr.`created_at` >= '2025-01-01 00:00:00'
+              AND xrr.`created_at` <= '2025-03-31 23:59:59'
+              AND xrr.`is_void` = 0
+              AND xrr.`redemption_period_id` IS NULL
+            GROUP BY xrp.`customer_id`
+            ORDER BY cc.`name`
+        """,
+        "category": "reward_liability",
+        "notes": "Groups unredeemed rewards by customer. Always filter is_void=0 and redemption_period_id IS NULL for liability."
+    },
+
+    # Adjustment Report - Q11
+    {
+        "question": "Get adjustment details by customer for Q1 2025",
+        "sql": """
+            SELECT
+                xa.`id`,
+                xa.`created_at`,
+                xa.`amount`,
+                xa.`note`,
+                xa.`is_approved`,
+                xrp.`cutoff_date`,
+                xrr.`first_name` AS `recipient_first_name`,
+                xrr.`last_name` AS `recipient_last_name`,
+                c.`fname` AS `customer_first_name`,
+                c.`lname` AS `customer_last_name`,
+                cc.`name` AS `company_name`
+            FROM `x_rewards_adjustments` xa
+            INNER JOIN `x_rewards_redemption_periods` xrp ON xa.`redemption_period_id` = xrp.`id`
+            INNER JOIN `x_rewards_recipients` xrr ON xrp.`recipient_id` = xrr.`id`
+            INNER JOIN `customers` c ON xrp.`customer_id` = c.`id`
+            LEFT JOIN `customer_companies` cc ON c.`company_id` = cc.`id`
+            WHERE xa.`created_at` >= '2025-01-01 00:00:00'
+              AND xa.`created_at` <= '2025-03-31 23:59:59'
+              AND xa.`is_approved` = 1
+            ORDER BY cc.`name`
+        """,
+        "category": "adjustment_report",
+        "notes": "Always filter is_approved=1 for adjustments that count toward balance. Adjustments can be positive or negative."
+    },
+
+    # Pay Sheet Report - Q12
+    {
+        "question": "Show paid pay sheets with recipient and payment details for Q1 2025",
+        "sql": """
+            SELECT
+                xrp.`id` AS `redemption_period_id`,
+                xrp.`cutoff_date`,
+                xrp.`balance`,
+                xrr.`first_name`,
+                xrr.`middle_name`,
+                xrr.`last_name`,
+                xrr.`email`,
+                xrr.`ssn_encrypted`,
+                c.`fname` AS `customer_first_name`,
+                c.`lname` AS `customer_last_name`,
+                cc.`name` AS `company_name`,
+                COALESCE(SUM(xrpay.`amount`), 0) AS `total_paid`
+            FROM `x_rewards_redemption_periods` xrp
+            INNER JOIN `x_rewards_recipients` xrr ON xrp.`recipient_id` = xrr.`id`
+            INNER JOIN `customers` c ON xrp.`customer_id` = c.`id`
+            LEFT JOIN `customer_companies` cc ON c.`company_id` = cc.`id`
+            LEFT JOIN `x_rewards_payments` xrpay ON xrpay.`redemption_period_id` = xrp.`id` AND xrpay.`void` = 0
+            WHERE xrp.`cutoff_date` >= '2025-01-01'
+              AND xrp.`cutoff_date` <= '2025-03-31'
+            GROUP BY xrp.`id`
+            ORDER BY cc.`name`, xrr.`last_name`
+        """,
+        "category": "pay_sheet",
+        "notes": "Filter void=0 for payments. SSN is encrypted. Redemption periods group rewards by recipient, customer, and cutoff_date."
+    },
+
+    # 1099 Report - Q13
+    {
+        "question": "Calculate 1099 totals by recipient for tax year 2025",
+        "sql": """
+            SELECT
+                xrr.`id` AS `recipient_id`,
+                xrr.`first_name`,
+                xrr.`middle_name`,
+                xrr.`last_name`,
+                xrr.`ssn_encrypted`,
+                xrr.`address1`,
+                xrr.`city`,
+                xrr.`state`,
+                xrr.`zip`,
+                xrr.`w9_received`,
+                COALESCE(SUM(xrpay.`amount`), 0) AS `total_payments`
+            FROM `x_rewards_payments` xrpay
+            INNER JOIN `x_rewards_redemption_periods` xrp ON xrpay.`redemption_period_id` = xrp.`id`
+            INNER JOIN `x_rewards_recipients` xrr ON xrp.`recipient_id` = xrr.`id`
+            WHERE xrp.`cutoff_date` >= '2025-01-01'
+              AND xrp.`cutoff_date` <= '2025-12-31'
+              AND xrpay.`void` = 0
+            GROUP BY xrr.`id`
+            HAVING `total_payments` > 0
+            ORDER BY xrr.`last_name`, xrr.`first_name`
+        """,
+        "category": "pay_sheet",
+        "notes": "1099 reporting uses cutoff_date year for tax purposes. w9_received indicates if W-9 form is on file. Filter void=0."
+    },
+
+    # RPM Report - Q14
+    {
+        "question": "Show RPM data aggregated by product for Q1 2025",
+        "sql": """
+            SELECT
+                rpm.`product_id`,
+                rpm.`product_sku`,
+                rpm.`product_name`,
+                SUM(rpm.`parts_sold`) AS `total_parts_sold`,
+                SUM(rpm.`gross_parts_revenue`) AS `total_gross_parts_revenue`,
+                SUM(rpm.`net_parts_revenue`) AS `total_net_parts_revenue`,
+                SUM(rpm.`labor_hours`) AS `total_labor_hours`,
+                SUM(rpm.`gross_labor_revenue`) AS `total_gross_labor_revenue`,
+                SUM(rpm.`net_labor_revenue`) AS `total_net_labor_revenue`,
+                SUM(rpm.`customer_retail_price`) AS `total_customer_retail_price`
+            FROM `x_rewards_rpm_data` rpm
+            INNER JOIN `x_rewards_rewards` xrr ON rpm.`reward_id` = xrr.`id`
+            WHERE xrr.`created_at` >= '2025-01-01 00:00:00'
+              AND xrr.`created_at` <= '2025-03-31 23:59:59'
+              AND xrr.`is_void` = 0
+            GROUP BY rpm.`product_id`
+            ORDER BY rpm.`product_sku`
+        """,
+        "category": "rpm_report",
+        "notes": "RPM = Retail Profit Management. Net revenue = gross revenue - rewards. Always filter is_void=0 on rewards."
+    },
+
+    # Customer Product Inventory - Q15
+    {
+        "question": "Show customer product inventory with stock levels",
+        "sql": """
+            SELECT
+                xrcp.`id`,
+                xrcp.`customer_id`,
+                xrcp.`product_id`,
+                p.`sku`,
+                p.`name` AS `product_name`,
+                xrcp.`price`,
+                xrcp.`low_inventory_quantity`,
+                xrcp.`preferred_inventory_quantity`,
+                xrcp.`inventory_quantity_override`,
+                xrcp.`reorder`,
+                c.`fname` AS `customer_first_name`,
+                c.`lname` AS `customer_last_name`,
+                cc.`name` AS `company_name`
+            FROM `x_rewards_customer_products` xrcp
+            INNER JOIN `products` p ON xrcp.`product_id` = p.`id`
+            INNER JOIN `customers` c ON xrcp.`customer_id` = c.`id`
+            LEFT JOIN `customer_companies` cc ON c.`company_id` = cc.`id`
+            WHERE xrcp.`deleted_by_user_id` IS NULL
+              AND xrcp.`deactivated` = 0
+            ORDER BY cc.`name`, p.`sku`
+        """,
+        "category": "customer_product",
+        "notes": "Filter deleted_by_user_id IS NULL for soft-delete. deactivated=0 for active products. Customer products have custom pricing."
+    },
+
+    # Purchase Obligations - Q16
+    {
+        "question": "List active purchase obligations by customer",
+        "sql": """
+            SELECT
+                xrpo.`id`,
+                xrpo.`label`,
+                xrpo.`quantity_required`,
+                xrpo.`rental_price`,
+                xrpo.`agreement_date`,
+                c.`fname` AS `customer_first_name`,
+                c.`lname` AS `customer_last_name`,
+                cc.`name` AS `company_name`
+            FROM `x_rewards_purchase_obligations` xrpo
+            INNER JOIN `customers` c ON xrpo.`customer_id` = c.`id`
+            LEFT JOIN `customer_companies` cc ON c.`company_id` = cc.`id`
+            WHERE xrpo.`deleted_by_user_id` IS NULL
+            ORDER BY cc.`name`, xrpo.`label`
+        """,
+        "category": "customer_product",
+        "notes": "Purchase obligations track customer contractual purchase requirements. Filter deleted_by_user_id IS NULL for active."
     },
 ]
 
