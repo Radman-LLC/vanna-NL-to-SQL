@@ -110,6 +110,21 @@ class ToolRegistry:
         # Grant access if any group in user.group_memberships exists in tool.access_groups
         return bool(user_groups & tool_groups)
 
+    @staticmethod
+    def _populate_tool_call_metadata(result: ToolResult, tool_call: ToolCall) -> None:
+        """Add tool call identification to result metadata.
+
+        Called after both successful and failed executions so that lifecycle
+        hooks (e.g., QueryLoggingHook) can always identify which tool ran
+        and with what arguments.
+
+        Args:
+            result: The ToolResult to annotate
+            tool_call: The original tool call with name and arguments
+        """
+        result.metadata["tool_name"] = tool_call.name
+        result.metadata["arguments"] = tool_call.arguments
+
     async def transform_args(
         self,
         tool: Tool[T],
@@ -254,10 +269,6 @@ class ToolRegistry:
             # Add execution time to metadata
             result.metadata["execution_time_ms"] = execution_time_ms
 
-            # Add tool name and arguments to metadata for lifecycle hooks
-            result.metadata["tool_name"] = tool_call.name
-            result.metadata["arguments"] = tool_call.arguments
-
             # Audit tool result
             if (
                 self.audit_logger
@@ -271,7 +282,6 @@ class ToolRegistry:
                     context=context,
                 )
 
-            return result
         except Exception as e:
             msg = f"Execution failed: {str(e)}"
             result = ToolResult(
@@ -280,8 +290,9 @@ class ToolRegistry:
                 ui_component=None,
                 error=msg,
             )
-            # Populate metadata so lifecycle hooks (e.g. QueryLoggingHook)
-            # can still log failed executions for debugging
-            result.metadata["tool_name"] = tool_call.name
-            result.metadata["arguments"] = tool_call.arguments
-            return result
+
+        # Populate tool call metadata on both success and error paths so
+        # lifecycle hooks (e.g. QueryLoggingHook) can identify which tool
+        # ran and with what arguments regardless of outcome.
+        self._populate_tool_call_metadata(result, tool_call)
+        return result

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Pages>
+  <Page
+    id=""
+    name="Getting Started with Vanna"
+    MDFileName="getting-started.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/getting-started~page"
+    parent_id=""
+  />
+  <Page
+    id=""
+    name="Architecture Overview"
+    MDFileName="architecture-overview.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/architecture-overview~page"
+    parent_id=""
+  />
+  <Page
+    id=""
+    name="Supported Integrations"
+    MDFileName="supported-integrations.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/supported-integrations~page"
+    parent_id=""
+  />
+  <Page
+    id=""
+    name="Configuring Vanna for Your Database"
+    MDFileName="domain-configuration.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/configuring-vanna-for-your-database~page"
+    parent_id=""
+  />
+  <Page
+    id=""
+    name="Training Vanna with Query Examples"
+    MDFileName="training-data.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/training-vanna-with-query-examples~page"
+    parent_id=""
+  />
+  <Page
+    id=""
+    name="Query Logging and Analytics"
+    MDFileName="query-logging.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/query-logging-and-analytics~page"
+    parent_id=""
+  />
+  <Page
+    id=""
+    name="User Permissions and Access Control"
+    MDFileName="user-permissions.md"
+    isSynced="false"
+    isDeleted="false"
+    externalUrl="/user-permissions-and-access-control~page"
+    parent_id=""
+  />
+</Pages>

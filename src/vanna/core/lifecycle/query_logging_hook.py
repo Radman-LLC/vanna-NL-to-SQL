@@ -11,6 +11,7 @@ Use cases:
 - Export successful queries for training data expansion
 """
 
+import asyncio
 import logging
 import json
 from datetime import datetime
@@ -40,6 +41,10 @@ class QueryLoggingHook(LifecycleHook):
     Logs are written as JSON lines (one JSON object per line) for easy
     parsing and analysis with tools like jq, pandas, or log aggregators.
 
+    For user_id and question to appear in logs, the caller (agent or registry)
+    must populate them in the ToolResult metadata dict under the keys
+    "user_id" and "question" before the after_tool hook fires.
+
     Args:
         log_file: Path to log file (default: ./vanna_query_log.jsonl)
         log_all_tools: If True, log all tool executions. If False, only
@@ -52,7 +57,7 @@ class QueryLoggingHook(LifecycleHook):
         self,
         log_file: str = "./vanna_query_log.jsonl",
         log_all_tools: bool = False,
-        include_result_preview: bool = False
+        include_result_preview: bool = False,
     ):
         self.log_file = Path(log_file)
         self.log_all_tools = log_all_tools
@@ -81,16 +86,29 @@ class QueryLoggingHook(LifecycleHook):
             # If metadata doesn't have tool_name, skip logging
             return None
 
-        # Filter by tool name if not logging all tools
+        # By default only log run_sql executions to keep log volume manageable.
+        # SQL queries are the primary artifact worth tracking for training data
+        # and usage analytics. Set log_all_tools=True to capture everything.
         if not self.log_all_tools and tool_name != "run_sql":
             return None
 
-        # Build log entry
+        # Build log entry with all available metadata fields
         log_entry = {
             "timestamp": datetime.utcnow().isoformat(),
             "tool_name": tool_name,
             "success": result.success,
         }
+
+        # Include user_id and question if the agent/registry populated them
+        # in the result metadata. These are needed by analyze_query_log()
+        # and export_successful_queries() for user tracking and training export.
+        user_id = result.metadata.get("user_id")
+        if user_id:
+            log_entry["user_id"] = user_id
+
+        question = result.metadata.get("question")
+        if question:
+            log_entry["question"] = question
 
         # Add tool arguments from metadata if available
         arguments = result.metadata.get("arguments")
@@ -101,25 +119,43 @@ class QueryLoggingHook(LifecycleHook):
         if not result.success and result.error:
             log_entry["error"] = result.error
 
-        # Optionally include result preview
+        # Optionally include a truncated result preview for debugging.
+        # Capped at 100 chars to prevent log bloat from large DataFrames
+        # or verbose result strings.
         if self.include_result_preview and result.result_for_llm:
             preview = str(result.result_for_llm)[:100]
             log_entry["result_preview"] = preview
 
-        # Write log entry as JSON line
+        # Write log entry as JSON line using async I/O to avoid blocking
+        # the event loop. File writes are offloaded to a thread pool since
+        # aiofiles is not a project dependency and adding one for a single
+        # write would be over-engineering.
         try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry) + "\n")
-        except Exception as e:
-            logger.error(f"Failed to write query log: {e}")
+            log_line = json.dumps(log_entry) + "\n"
+            await asyncio.to_thread(self._write_log_line, log_line)
+        except Exception:
+            # Swallow write errors to prevent logging failures from crashing
+            # the tool execution pipeline. Logging is best-effort — a flaky
+            # filesystem or full disk should not break user-facing queries.
+            logger.error(f"Failed to write query log to {self.log_file}", exc_info=True)
 
         # Return None to keep original result unchanged
         return None
+
+    def _write_log_line(self, line: str) -> None:
+        """Write a single log line to the log file (synchronous, runs in thread pool).
+
+        Args:
+            line: JSON line string to append
+        """
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            f.write(line)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Utility Functions for Log Analysis
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def analyze_query_log(log_file: str = "./vanna_query_log.jsonl"):
     """Analyze query log and print summary statistics.
@@ -127,10 +163,14 @@ def analyze_query_log(log_file: str = "./vanna_query_log.jsonl"):
     This is a utility function for quick log analysis. Run it periodically
     to understand usage patterns.
 
+    Note: user_id and question fields are only present if the agent/registry
+    populates them in ToolResult metadata. If missing, those sections will
+    show zero counts.
+
     Usage:
         python -c "from vanna.core.lifecycle.query_logging_hook import analyze_query_log; analyze_query_log()"
     """
-    from collections import defaultdict, Counter
+    from collections import Counter
 
     if not Path(log_file).exists():
         print(f"Log file not found: {log_file}")
@@ -181,8 +221,10 @@ def analyze_query_log(log_file: str = "./vanna_query_log.jsonl"):
 
     # Avoid division by zero if log is empty
     if total_queries > 0:
-        print(f"Successful: {successful_queries} ({successful_queries/total_queries*100:.1f}%)")
-        print(f"Failed: {failed_queries} ({failed_queries/total_queries*100:.1f}%)")
+        print(
+            f"Successful: {successful_queries} ({successful_queries / total_queries * 100:.1f}%)"
+        )
+        print(f"Failed: {failed_queries} ({failed_queries / total_queries * 100:.1f}%)")
     else:
         print("No queries found in log file")
 
@@ -207,12 +249,16 @@ def analyze_query_log(log_file: str = "./vanna_query_log.jsonl"):
 
 def export_successful_queries(
     log_file: str = "./vanna_query_log.jsonl",
-    output_file: str = "./successful_queries.json"
+    output_file: str = "./successful_queries.json",
 ):
     """Export all successful SQL queries to a file for training data.
 
     This extracts question-SQL pairs from successful queries and saves
     them in a format that can be added to your training library.
+
+    Note: Only entries where both 'question' and 'arguments.sql' are present
+    will be exported. If the agent/registry does not populate the 'question'
+    field in ToolResult metadata, this function will export zero entries.
 
     Usage:
         python -c "from vanna.core.lifecycle.query_logging_hook import export_successful_queries; export_successful_queries()"
@@ -228,19 +274,23 @@ def export_successful_queries(
             try:
                 entry = json.loads(line.strip())
 
-                # Only export successful SQL queries with questions
+                # Only export successful SQL queries that have both
+                # a user question and the generated SQL — these form
+                # the training pairs needed for query library expansion
                 if (
                     entry.get("success")
                     and entry.get("tool_name") == "run_sql"
                     and entry.get("question")
                     and entry.get("arguments", {}).get("sql")
                 ):
-                    successful_pairs.append({
-                        "question": entry["question"],
-                        "sql": entry["arguments"]["sql"],
-                        "timestamp": entry["timestamp"],
-                        "user_id": entry.get("user_id")
-                    })
+                    successful_pairs.append(
+                        {
+                            "question": entry["question"],
+                            "sql": entry["arguments"]["sql"],
+                            "timestamp": entry["timestamp"],
+                            "user_id": entry.get("user_id"),
+                        }
+                    )
             except json.JSONDecodeError:
                 continue
 

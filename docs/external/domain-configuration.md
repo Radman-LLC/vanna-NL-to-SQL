@@ -357,5 +357,6 @@ DATA_QUALITY_NOTES = [
 
 ## Related Topics
 
-- Domain Prompt Builder: Learn how domain configuration is integrated into system prompts
-- Training Vanna: Add query examples to improve accuracy
+- [Training Vanna with Query Examples](training-data.md): Add query examples to improve accuracy.
+- [Query Logging and Analytics](query-logging.md): Track query patterns and identify gaps.
+- [Getting Started with Vanna](getting-started.md): Initial setup and configuration.

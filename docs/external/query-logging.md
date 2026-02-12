@@ -404,6 +404,6 @@ Track before and after metrics:
 
 ## Related Topics
 
-- Improving Query Accuracy: Use memory enhancement to reduce errors
-- Training Vanna: Add examples to improve SQL generation
-- Domain Configuration: Teach Vanna about your database
+- [Training Vanna with Query Examples](training-data.md): Add examples to improve SQL generation.
+- [Configuring Vanna for Your Database](domain-configuration.md): Teach Vanna about your database.
+- [Getting Started with Vanna](getting-started.md): Initial setup and configuration.

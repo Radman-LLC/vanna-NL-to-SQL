@@ -9,10 +9,16 @@ This allows you to inject expertise about:
 - SQL patterns and conventions for your database
 - Performance optimization hints
 - Data quality rules and edge cases
+
+Memory workflow instructions are automatically included when memory tools
+are registered, using the shared memory_instructions module.
 """
 
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, List, TYPE_CHECKING
 from vanna.core.system_prompt.base import SystemPromptBuilder
+from vanna.core.system_prompt.memory_instructions import (
+    build_memory_workflow_instructions,
+)
 
 if TYPE_CHECKING:
     from ..tool.models import ToolSchema
@@ -25,6 +31,10 @@ class DomainPromptBuilder(SystemPromptBuilder):
     This builder takes a base prompt (e.g., read-only rules) and allows you to
     add domain-specific knowledge sections like database type, business definitions,
     SQL patterns, and performance hints.
+
+    Memory workflow instructions are automatically appended when memory tools
+    (search_saved_correct_tool_uses, save_question_tool_args, save_text_memory)
+    are available in the tool list.
 
     Example:
         ```python
@@ -68,7 +78,7 @@ class DomainPromptBuilder(SystemPromptBuilder):
         sql_patterns: Optional[list] = None,
         performance_hints: Optional[list] = None,
         data_quality_notes: Optional[list] = None,
-        additional_context: Optional[str] = None
+        additional_context: Optional[str] = None,
     ):
         self.base_prompt = base_prompt
         self.database_type = database_type
@@ -79,8 +89,13 @@ class DomainPromptBuilder(SystemPromptBuilder):
         self.data_quality_notes = data_quality_notes or []
         self.additional_context = additional_context
 
-    async def build_system_prompt(self, user: "User", tools: list["ToolSchema"]) -> Optional[str]:
-        """Build the complete system prompt with domain knowledge.
+    async def build_system_prompt(
+        self, user: "User", tools: list["ToolSchema"]
+    ) -> Optional[str]:
+        """Build the complete system prompt with domain knowledge and memory instructions.
+
+        Combines the base prompt, domain-specific sections, memory workflow
+        instructions, and any additional context into a single prompt.
 
         Args:
             user: The user making the request
@@ -96,21 +111,60 @@ class DomainPromptBuilder(SystemPromptBuilder):
         if self.database_type or self.database_purpose:
             sections.append(self._build_database_info_section())
 
-        # Add business definitions section
+        # Add business definitions section (key-value format)
         if self.business_definitions:
-            sections.append(self._build_business_definitions_section())
+            lines = [
+                f"- **{term}**: {defn}"
+                for term, defn in self.business_definitions.items()
+            ]
+            sections.append(
+                self._build_list_section(
+                    header="BUSINESS DEFINITIONS:",
+                    intro="When users ask about these business concepts, use these definitions:",
+                    items=lines,
+                    numbered=False,
+                )
+            )
 
-        # Add SQL patterns section
+        # Add SQL patterns section (numbered for reference)
         if self.sql_patterns:
-            sections.append(self._build_sql_patterns_section())
+            sections.append(
+                self._build_list_section(
+                    header="SQL BEST PRACTICES FOR THIS DATABASE:",
+                    intro="Always follow these patterns when generating SQL:",
+                    items=self.sql_patterns,
+                    numbered=True,
+                )
+            )
 
-        # Add performance hints section
+        # Add performance hints section (numbered for reference)
         if self.performance_hints:
-            sections.append(self._build_performance_section())
+            sections.append(
+                self._build_list_section(
+                    header="PERFORMANCE CONSIDERATIONS:",
+                    intro="Be aware of these performance characteristics:",
+                    items=self.performance_hints,
+                    numbered=True,
+                )
+            )
 
-        # Add data quality notes section
+        # Add data quality notes section (numbered for reference)
         if self.data_quality_notes:
-            sections.append(self._build_data_quality_section())
+            sections.append(
+                self._build_list_section(
+                    header="DATA QUALITY NOTES:",
+                    intro="Be aware of these data quality issues:",
+                    items=self.data_quality_notes,
+                    numbered=True,
+                )
+            )
+
+        # Add memory workflow instructions if memory tools are registered.
+        # Without these, the LLM won't know to call search_saved_correct_tool_uses
+        # before execution or save_question_tool_args after success.
+        memory_instructions = build_memory_workflow_instructions(tools)
+        if memory_instructions:
+            sections.append(memory_instructions)
 
         # Add any additional context
         if self.additional_context:
@@ -131,43 +185,29 @@ class DomainPromptBuilder(SystemPromptBuilder):
 
         return section
 
-    def _build_business_definitions_section(self) -> str:
-        """Build the business definitions section."""
-        section = "BUSINESS DEFINITIONS:"
-        section += "\nWhen users ask about these business concepts, use these definitions:\n"
+    def _build_list_section(
+        self, header: str, intro: str, items: List[str], numbered: bool = True
+    ) -> str:
+        """Build a prompt section from a header, intro line, and list of items.
 
-        for term, definition in self.business_definitions.items():
-            section += f"\n- **{term}**: {definition}"
+        Consolidates the repeated pattern used by business definitions,
+        SQL patterns, performance hints, and data quality notes.
 
-        return section
+        Args:
+            header: Section header (e.g., "SQL BEST PRACTICES FOR THIS DATABASE:")
+            intro: Introductory sentence below the header
+            items: List of items to display
+            numbered: If True, prefix items with 1. 2. 3. etc.
+                      If False, items are included as-is (caller controls formatting)
 
-    def _build_sql_patterns_section(self) -> str:
-        """Build the SQL patterns and best practices section."""
-        section = "SQL BEST PRACTICES FOR THIS DATABASE:"
-        section += "\nAlways follow these patterns when generating SQL:\n"
+        Returns:
+            Formatted section string
+        """
+        section = header + "\n" + intro + "\n"
 
-        for i, pattern in enumerate(self.sql_patterns, 1):
-            section += f"\n{i}. {pattern}"
-
-        return section
-
-    def _build_performance_section(self) -> str:
-        """Build the performance hints section."""
-        section = "PERFORMANCE CONSIDERATIONS:"
-        section += "\nBe aware of these performance characteristics:\n"
-
-        for i, hint in enumerate(self.performance_hints, 1):
-            section += f"\n{i}. {hint}"
-
-        return section
-
-    def _build_data_quality_section(self) -> str:
-        """Build the data quality notes section."""
-        section = "DATA QUALITY NOTES:"
-        section += "\nBe aware of these data quality issues:\n"
-
-        for i, note in enumerate(self.data_quality_notes, 1):
-            section += f"\n{i}. {note}"
+        for i, item in enumerate(items, 1):
+            prefix = f"{i}. " if numbered else ""
+            section += f"\n{prefix}{item}"
 
         return section
 
@@ -175,6 +215,7 @@ class DomainPromptBuilder(SystemPromptBuilder):
 # ═══════════════════════════════════════════════════════════════════════════
 # Example Usage and Template
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def create_example_mysql_prompt(base_prompt: str) -> DomainPromptBuilder:
     """Example: Create a domain prompt for a MySQL e-commerce database.
@@ -190,11 +231,9 @@ def create_example_mysql_prompt(base_prompt: str) -> DomainPromptBuilder:
     """
     return DomainPromptBuilder(
         base_prompt=base_prompt,
-
         # Database metadata
         database_type="MySQL 8.0",
         database_purpose="E-commerce transaction and customer database",
-
         # Business term definitions
         business_definitions={
             "churn": "A user is churned if they have no transactions in the last 90 days",
@@ -203,7 +242,6 @@ def create_example_mysql_prompt(base_prompt: str) -> DomainPromptBuilder:
             "ARPU": "Average Revenue Per User - total revenue divided by unique customers",
             "conversion rate": "Percentage of users who made at least one purchase",
         },
-
         # SQL best practices
         sql_patterns=[
             "Always filter out test transactions: WHERE is_test = FALSE",
@@ -213,7 +251,6 @@ def create_example_mysql_prompt(base_prompt: str) -> DomainPromptBuilder:
             "Use DISTINCT when counting unique users: COUNT(DISTINCT user_id)",
             "Add LIMIT clauses for exploratory queries to avoid large result sets",
         ],
-
         # Performance tips
         performance_hints=[
             "The transactions table is partitioned by month - include date filters for better performance",
@@ -221,7 +258,6 @@ def create_example_mysql_prompt(base_prompt: str) -> DomainPromptBuilder:
             "user_id and transaction_date are indexed - use them in WHERE clauses",
             "For large aggregations, consider using WITH (CTE) for better readability",
         ],
-
         # Data quality issues
         data_quality_notes=[
             "Some users have duplicate emails (legacy data) - GROUP BY email when needed",
@@ -229,7 +265,7 @@ def create_example_mysql_prompt(base_prompt: str) -> DomainPromptBuilder:
             "Product names may contain typos - use LIKE with wildcards for searching",
             "NULL in users.region means international user (outside known regions)",
             "Refunds are represented as new rows with negative amounts, not UPDATEs",
-        ]
+        ],
     )
 
 
@@ -244,16 +280,13 @@ def create_example_snowflake_prompt(base_prompt: str) -> DomainPromptBuilder:
     """
     return DomainPromptBuilder(
         base_prompt=base_prompt,
-
         database_type="Snowflake Data Warehouse",
         database_purpose="Analytics data warehouse with sales, marketing, and product data",
-
         business_definitions={
             "qualified lead": "Lead with score >= 70 and engagement in last 14 days",
             "customer lifetime value": "Total revenue from a customer across all time",
             "retention rate": "Percentage of customers who made repeat purchases",
         },
-
         sql_patterns=[
             "Use Snowflake date functions: DATEADD, DATEDIFF, DATE_TRUNC",
             "Leverage CTEs (WITH clauses) for complex queries instead of subqueries",
@@ -261,17 +294,15 @@ def create_example_snowflake_prompt(base_prompt: str) -> DomainPromptBuilder:
             "Schema qualification: Always use schema.table format (SALES.TRANSACTIONS)",
             "Case insensitive: Column names and table names are case-insensitive",
         ],
-
         performance_hints=[
             "Tables are clustered by date - always include date filters",
             "Use SAMPLE for exploratory queries: SELECT * FROM table SAMPLE (1000 ROWS)",
             "Avoid SELECT * - specify columns to reduce data scanning",
             "LIMIT doesn't improve performance - Snowflake scans full table anyway",
         ],
-
         data_quality_notes=[
             "Data is updated nightly via ETL - may be up to 24 hours old",
             "Customer IDs can be NULL for anonymous sessions",
             "Revenue figures are in USD, converted from local currencies at transaction time",
-        ]
+        ],
     )

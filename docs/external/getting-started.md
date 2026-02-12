@@ -124,7 +124,7 @@ await agent_memory.save_tool_usage(
 )
 ```
 
-**Learn more:** [Improving Query Accuracy](improving-query-accuracy.md)
+**Learn more:** [Training Vanna with Query Examples](training-data.md)
 
 ### Step 3: Enable Query Logging
 
@@ -343,19 +343,20 @@ Always review generated SQL before execution in production:
 ### Learn More
 
 - **[Domain Configuration](domain-configuration.md)**: Customize Vanna for your database
-- **[Improving Query Accuracy](improving-query-accuracy.md)**: Use memory enhancement
+- **[Training Vanna with Query Examples](training-data.md)**: Improve accuracy with training data
 - **[Query Logging](query-logging.md)**: Track and analyze query patterns
 
 ### Explore Advanced Features
 
+- **[Architecture Overview](architecture-overview.md)**: Understand how Vanna processes queries
+- **[Supported Integrations](supported-integrations.md)**: Available AI models, databases, and vector stores
+- **[User Permissions](user-permissions.md)**: Configure access control
 - **Lifecycle Hooks**: Customize behavior at each stage
-- **Custom Tools**: Add new capabilities beyond SQL
-- **Multi-Database Support**: Query multiple databases
 - **Streaming Responses**: Real-time query results
 
 ### Get Support
 
-- **Documentation**: Comprehensive guides and API reference
+- **Documentation**: Comprehensive guides and reference
 - **Community**: Join discussions and share experiences
 - **Issues**: Report bugs and request features
 
