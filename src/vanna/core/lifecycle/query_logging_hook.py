@@ -67,38 +67,36 @@ class QueryLoggingHook(LifecycleHook):
             self.log_file.touch()
             logger.info(f"Created query log file: {self.log_file}")
 
-    async def post_tool_execution(
-        self,
-        tool_call: "ToolCall",
-        result: "ToolResult",
-        context: "ToolContext"
-    ) -> None:
+    async def after_tool(self, result: "ToolResult") -> Optional["ToolResult"]:
         """Log tool execution after it completes.
 
         Args:
-            tool_call: The tool that was executed
-            result: The result from the tool
-            context: Execution context with user info
+            result: The result from the tool execution
+
+        Returns:
+            None to keep the original result unchanged
         """
+        # Tool name and arguments are added to metadata by the registry
+        tool_name = result.metadata.get("tool_name")
+        if not tool_name:
+            # If metadata doesn't have tool_name, skip logging
+            return None
+
         # Filter by tool name if not logging all tools
-        if not self.log_all_tools and tool_call.name != "run_sql":
-            return
+        if not self.log_all_tools and tool_name != "run_sql":
+            return None
 
         # Build log entry
         log_entry = {
             "timestamp": datetime.utcnow().isoformat(),
-            "tool_name": tool_call.name,
-            "user_id": context.user.id if context.user else None,
-            "user_email": context.user.email if context.user else None,
-            "user_groups": context.user.group_memberships if context.user else [],
-            "conversation_id": context.conversation_id,
-            "request_id": context.request_id,
+            "tool_name": tool_name,
             "success": result.success,
         }
 
-        # Add tool arguments (e.g., the SQL query)
-        if tool_call.arguments:
-            log_entry["arguments"] = tool_call.arguments
+        # Add tool arguments from metadata if available
+        arguments = result.metadata.get("arguments")
+        if arguments:
+            log_entry["arguments"] = arguments
 
         # Add error information if failed
         if not result.success and result.error:
@@ -109,24 +107,15 @@ class QueryLoggingHook(LifecycleHook):
             preview = str(result.result_for_llm)[:100]
             log_entry["result_preview"] = preview
 
-        # Add any metadata from context
-        if context.metadata:
-            # Extract question if available
-            question = context.metadata.get("question")
-            if question:
-                log_entry["question"] = question
-
-            # Add any other relevant metadata
-            for key in ["conversation_turn", "retry_count"]:
-                if key in context.metadata:
-                    log_entry[key] = context.metadata[key]
-
         # Write log entry as JSON line
         try:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
         except Exception as e:
             logger.error(f"Failed to write query log: {e}")
+
+        # Return None to keep original result unchanged
+        return None
 
 
 class DatabaseQueryLogger(QueryLoggingHook):
@@ -277,8 +266,14 @@ def analyze_query_log(log_file: str = "./vanna_query_log.jsonl"):
     print("Vanna Query Log Analysis")
     print("=" * 70)
     print(f"\nTotal queries: {total_queries}")
-    print(f"Successful: {successful_queries} ({successful_queries/total_queries*100:.1f}%)")
-    print(f"Failed: {failed_queries} ({failed_queries/total_queries*100:.1f}%)")
+
+    # Avoid division by zero if log is empty
+    if total_queries > 0:
+        print(f"Successful: {successful_queries} ({successful_queries/total_queries*100:.1f}%)")
+        print(f"Failed: {failed_queries} ({failed_queries/total_queries*100:.1f}%)")
+    else:
+        print("No queries found in log file")
+
     print(f"\nUnique users: {len(users)}")
 
     print(f"\nTool usage:")

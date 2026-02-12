@@ -64,7 +64,7 @@ def create_agent():
         SearchSavedCorrectToolUsesTool,
         SaveTextMemoryTool
     )
-    from vanna.core.enhancer.memory_enhancer import MemoryBasedEnhancer
+    # from vanna.core.enhancer.memory_enhancer import MemoryBasedEnhancer  # Disabled - interface issues
     from vanna.core.lifecycle.query_logging_hook import QueryLoggingHook
 
     # Import domain-specific configuration
@@ -159,16 +159,18 @@ def create_agent():
         collection_name="mysql_queries"
     )
 
-    # Memory-based context enhancer — automatically injects relevant past queries
-    # into the LLM's system prompt. When a user asks a question, this searches
-    # agent memory for the top 5 most similar past questions and includes their
-    # SQL as reference examples. This dramatically improves SQL accuracy by showing
-    # the LLM proven patterns that work with your specific database schema.
-    context_enhancer = MemoryBasedEnhancer(
-        max_examples=5,           # Inject up to 5 similar past queries
-        similarity_threshold=0.7,  # Only include queries with 70%+ similarity
-        include_metadata=False     # Keep injected examples concise
-    )
+    # NOTE: MemoryBasedEnhancer is currently disabled due to interface limitations.
+    # The LlmContextEnhancer base class doesn't provide access to agent_memory,
+    # so memory-based enhancement cannot function properly. This requires
+    # architectural changes to the Agent class to support memory-based context
+    # enhancement. Leaving commented out for now.
+    #
+    # context_enhancer = MemoryBasedEnhancer(
+    #     max_examples=5,           # Inject up to 5 similar past queries
+    #     similarity_threshold=0.7,  # Only include queries with 70%+ similarity
+    #     include_metadata=False     # Keep injected examples concise
+    # )
+    context_enhancer = None  # Disabled until interface is fixed
 
     # Domain-specific system prompt builder — combines read-only rules with
     # database-specific knowledge from domain_config.py. This tells Claude about

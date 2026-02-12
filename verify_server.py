@@ -30,7 +30,6 @@ async def test_server():
         if os.path.exists("./vanna_memory"):
             print("  ✓ Memory directory exists")
             # Count files in memory directory
-            import os
             chroma_files = []
             for root, dirs, files in os.walk("./vanna_memory"):
                 chroma_files.extend(files)

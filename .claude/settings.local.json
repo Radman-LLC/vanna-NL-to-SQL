@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:vanna.ai)"
+      "WebFetch(domain:vanna.ai)",
+      "Bash(python run_web_ui.py:*)",
+      "Bash(ping:*)"
     ]
   }
 }

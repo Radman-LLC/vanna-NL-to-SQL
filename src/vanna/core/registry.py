@@ -254,6 +254,10 @@ class ToolRegistry:
             # Add execution time to metadata
             result.metadata["execution_time_ms"] = execution_time_ms
 
+            # Add tool name and arguments to metadata for lifecycle hooks
+            result.metadata["tool_name"] = tool_call.name
+            result.metadata["arguments"] = tool_call.arguments
+
             # Audit tool result
             if (
                 self.audit_logger

@@ -38,6 +38,11 @@ class MemoryBasedEnhancer(LlmContextEnhancer):
     user question and injects the top matching SQL queries as examples in the
     system prompt.
 
+    NOTE: This implementation is currently simplified due to interface limitations.
+    The base LlmContextEnhancer interface doesn't provide access to agent_memory,
+    so memory-based enhancement is not yet functional. This needs architectural
+    changes to the Agent class to properly support memory-based context enhancement.
+
     Args:
         max_examples: Maximum number of example queries to inject (default: 5)
         similarity_threshold: Minimum similarity score (0.0-1.0) for including
@@ -59,70 +64,53 @@ class MemoryBasedEnhancer(LlmContextEnhancer):
         self.similarity_threshold = similarity_threshold
         self.include_metadata = include_metadata
         self.example_format = example_format
+        logger.warning(
+            "MemoryBasedEnhancer is currently non-functional due to interface limitations. "
+            "The LlmContextEnhancer interface doesn't provide access to agent_memory. "
+            "This feature requires architectural changes to the Agent class."
+        )
 
-    async def enhance_context(
-        self,
-        request: "LlmRequest",
-        conversation: "Conversation",
-        context: "ToolContext"
-    ) -> "LlmRequest":
-        """Enhance the LLM request by injecting similar past queries.
+    async def enhance_system_prompt(
+        self, system_prompt: str, user_message: str, user: "User"
+    ) -> str:
+        """Enhance the system prompt by injecting similar past queries from memory.
 
-        Searches agent memory for questions similar to the user's current message
+        Searches agent memory for questions similar to the user's message
         and adds them to the system prompt as reference examples.
 
         Args:
-            request: The LLM request to enhance
-            conversation: The current conversation history
-            context: Tool execution context with user info and agent memory
+            system_prompt: The original system prompt
+            user_message: The initial user message
+            user: The user making the request
 
         Returns:
-            Enhanced LLM request with examples injected into system message
+            Enhanced system prompt with injected examples
         """
-        # Only enhance if agent memory is available
-        if not context.agent_memory:
-            logger.debug("No agent memory available, skipping memory enhancement")
-            return request
+        # Note: This is a simplified implementation. In a full implementation,
+        # we would need access to the agent_memory which isn't directly available
+        # through this interface. For now, return the original system prompt.
+        # The proper way to access memory is through the Agent's context.
 
-        # Extract the user's current question from conversation
-        user_question = self._extract_user_question(conversation)
-        if not user_question:
-            logger.debug("No user question found, skipping memory enhancement")
-            return request
+        # TODO: Consider using a different approach, such as passing agent_memory
+        # in the constructor and storing it as an instance variable
 
-        # Search memory for similar past queries
-        try:
-            similar_queries = await self._search_similar_queries(
-                user_question,
-                context
-            )
-        except Exception as e:
-            # Don't fail the request if memory search fails, just log and continue
-            logger.warning(f"Memory search failed: {e}")
-            return request
+        logger.debug("enhance_system_prompt called - memory search not yet implemented in this interface")
+        return system_prompt
 
-        # If no similar queries found, return original request
-        if not similar_queries:
-            logger.debug(f"No similar queries found for: {user_question}")
-            return request
+    async def enhance_user_messages(
+        self, messages: list["LlmMessage"], user: "User"
+    ) -> list["LlmMessage"]:
+        """Enhance user messages with additional context.
 
-        # Format and inject examples into system prompt
-        examples_text = self._format_examples(similar_queries)
-        enhanced_system_message = self._inject_examples(
-            request.system_message or "",
-            examples_text,
-            len(similar_queries)
-        )
+        Args:
+            messages: The list of messages to enhance
+            user: The user making the request
 
-        # Create enhanced request with updated system message
-        request.system_message = enhanced_system_message
-
-        logger.info(
-            f"Enhanced context with {len(similar_queries)} example(s) "
-            f"for question: {user_question[:50]}..."
-        )
-
-        return request
+        Returns:
+            Original messages unchanged
+        """
+        # No enhancement needed for user messages in this implementation
+        return messages
 
     def _extract_user_question(self, conversation: "Conversation") -> Optional[str]:
         """Extract the most recent user question from conversation history.
