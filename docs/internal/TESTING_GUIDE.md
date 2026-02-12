@@ -50,9 +50,9 @@ This guide walks you through testing all the new optimization features we implem
 - Should reference similar table/column names
 
 **How it works:**
-- MemoryBasedEnhancer searches memory for "revenue last month"
-- Finds the training pair with similarity > 0.7
-- Injects it into system prompt
+- DefaultLlmContextEnhancer searches memory for "revenue last month"
+- Finds relevant text memories from ChromaDB
+- Injects matching context into system prompt
 - LLM sees proven pattern and generates similar SQL
 
 ---
@@ -246,7 +246,7 @@ After running tests, verify:
 **"No similar queries found"**
 - Normal for questions very different from training data
 - Add more training pairs for that question type
-- Lower similarity_threshold in MemoryBasedEnhancer
+- Add more training data to ChromaDB memory
 
 **"Memory not working"**
 - Check `./vanna_memory/` directory exists

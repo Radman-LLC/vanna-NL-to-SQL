@@ -15,13 +15,12 @@ import logging
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Any, Dict
+from typing import TYPE_CHECKING, Optional
 
 from vanna.core.lifecycle.base import LifecycleHook
 
 if TYPE_CHECKING:
-    from vanna.core.tool.base import ToolContext, ToolCall, ToolResult
-    from vanna.core.llm.models import LlmRequest, LlmResponse
+    from vanna.core.tool.base import ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -116,93 +115,6 @@ class QueryLoggingHook(LifecycleHook):
 
         # Return None to keep original result unchanged
         return None
-
-
-class DatabaseQueryLogger(QueryLoggingHook):
-    """Extended logger that writes to a database instead of a file.
-
-    This is a template for database-backed logging. Implement the
-    _write_to_database method to connect to your database.
-
-    Example databases:
-    - SQLite for local development
-    - PostgreSQL for production
-    - MongoDB for document storage
-    - ClickHouse for analytics
-    """
-
-    def __init__(
-        self,
-        db_connection_string: Optional[str] = None,
-        table_name: str = "vanna_query_logs",
-        **kwargs
-    ):
-        # Don't create a log file
-        super().__init__(log_file="/dev/null", **kwargs)
-        self.db_connection_string = db_connection_string
-        self.table_name = table_name
-
-    async def post_tool_execution(
-        self,
-        tool_call: "ToolCall",
-        result: "ToolResult",
-        context: "ToolContext"
-    ) -> None:
-        """Log tool execution to database."""
-        # Filter by tool name if not logging all tools
-        if not self.log_all_tools and tool_call.name != "run_sql":
-            return
-
-        # Build log entry (same as parent class)
-        log_entry = {
-            "timestamp": datetime.utcnow(),
-            "tool_name": tool_call.name,
-            "user_id": context.user.id if context.user else None,
-            "user_email": context.user.email if context.user else None,
-            "user_groups": json.dumps(context.user.group_memberships) if context.user else "[]",
-            "conversation_id": context.conversation_id,
-            "request_id": context.request_id,
-            "success": result.success,
-            "arguments": json.dumps(tool_call.arguments) if tool_call.arguments else None,
-            "error": result.error if not result.success else None,
-        }
-
-        # Extract question and SQL for easier querying
-        if tool_call.name == "run_sql" and tool_call.arguments:
-            log_entry["sql"] = tool_call.arguments.get("sql")
-
-        if context.metadata:
-            log_entry["question"] = context.metadata.get("question")
-
-        # Write to database
-        try:
-            await self._write_to_database(log_entry)
-        except Exception as e:
-            logger.error(f"Failed to write to database: {e}")
-
-    async def _write_to_database(self, log_entry: Dict[str, Any]) -> None:
-        """Write log entry to database.
-
-        Override this method to implement database-specific logic.
-
-        Example for SQLite:
-        ```python
-        async def _write_to_database(self, log_entry):
-            async with aiosqlite.connect(self.db_connection_string) as db:
-                await db.execute(
-                    f"INSERT INTO {self.table_name} (timestamp, tool_name, user_id, ...) "
-                    f"VALUES (?, ?, ?, ...)",
-                    tuple(log_entry.values())
-                )
-                await db.commit()
-        ```
-
-        Args:
-            log_entry: Dictionary with log data
-        """
-        raise NotImplementedError(
-            "Subclass must implement _write_to_database method"
-        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

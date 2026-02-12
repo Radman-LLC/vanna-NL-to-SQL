@@ -100,59 +100,6 @@ agent = Agent(
 )
 ```
 
-### 2. DatabaseQueryLogger (Template)
-
-An extended logger that writes to a database instead of a file. This is a template class - you must implement the `_write_to_database()` method for your specific database.
-
-**Supported Databases:**
-
-- SQLite (local development)
-- PostgreSQL (production)
-- MongoDB (document storage)
-- ClickHouse (analytics)
-- Any database with async Python driver
-
-**Configuration:**
-
-```python
-from vanna.core.lifecycle.query_logging_hook import DatabaseQueryLogger
-
-db_logger = DatabaseQueryLogger(
-    db_connection_string="postgresql://user:pass@localhost/vanna_logs",
-    table_name="vanna_query_logs",
-    log_all_tools=False,
-    include_result_preview=False
-)
-```
-
-**Implementation Required:**
-
-You must subclass and implement `_write_to_database()`:
-
-```python
-import aiosqlite
-from vanna.core.lifecycle.query_logging_hook import DatabaseQueryLogger
-
-class SQLiteQueryLogger(DatabaseQueryLogger):
-    async def _write_to_database(self, log_entry: Dict[str, Any]) -> None:
-        """Write log entry to SQLite database."""
-        async with aiosqlite.connect(self.db_connection_string) as db:
-            await db.execute(
-                f"INSERT INTO {self.table_name} "
-                "(timestamp, tool_name, user_id, sql, success, error) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    log_entry["timestamp"],
-                    log_entry["tool_name"],
-                    log_entry.get("user_id"),
-                    log_entry.get("sql"),
-                    log_entry["success"],
-                    log_entry.get("error")
-                )
-            )
-            await db.commit()
-```
-
 ## How It Works
 
 The hook uses the `after_tool()` lifecycle method to log after each tool execution:

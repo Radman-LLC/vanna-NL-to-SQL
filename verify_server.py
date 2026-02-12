@@ -53,7 +53,7 @@ async def test_server():
         print("\n[Test 4] Checking feature imports...")
         try:
             from vanna.integrations.chromadb import ChromaAgentMemory
-            from vanna.core.enhancer.memory_enhancer import MemoryBasedEnhancer
+            from vanna.core.enhancer import DefaultLlmContextEnhancer
             from vanna.core.system_prompt.domain_prompt_builder import DomainPromptBuilder
             from vanna.core.lifecycle.query_logging_hook import QueryLoggingHook
             print("  ✓ All optimization features imported successfully")

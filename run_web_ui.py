@@ -64,7 +64,7 @@ def create_agent():
         SearchSavedCorrectToolUsesTool,
         SaveTextMemoryTool
     )
-    # from vanna.core.enhancer.memory_enhancer import MemoryBasedEnhancer  # Disabled - interface issues
+    from vanna.core.enhancer import DefaultLlmContextEnhancer
     from vanna.core.lifecycle.query_logging_hook import QueryLoggingHook
 
     # Import domain-specific configuration
@@ -159,18 +159,10 @@ def create_agent():
         collection_name="mysql_queries"
     )
 
-    # NOTE: MemoryBasedEnhancer is currently disabled due to interface limitations.
-    # The LlmContextEnhancer base class doesn't provide access to agent_memory,
-    # so memory-based enhancement cannot function properly. This requires
-    # architectural changes to the Agent class to support memory-based context
-    # enhancement. Leaving commented out for now.
-    #
-    # context_enhancer = MemoryBasedEnhancer(
-    #     max_examples=5,           # Inject up to 5 similar past queries
-    #     similarity_threshold=0.7,  # Only include queries with 70%+ similarity
-    #     include_metadata=False     # Keep injected examples concise
-    # )
-    context_enhancer = None  # Disabled until interface is fixed
+    # Use upstream DefaultLlmContextEnhancer to automatically inject relevant
+    # past queries from ChromaDB memory into the LLM's system prompt. This
+    # searches for similar past questions and adds proven SQL patterns as context.
+    context_enhancer = DefaultLlmContextEnhancer(agent_memory)
 
     # Domain-specific system prompt builder — combines read-only rules with
     # database-specific knowledge from domain_config.py. This tells Claude about

@@ -369,7 +369,7 @@ from vanna.integrations.chromadb import ChromaAgentMemory
 from vanna.core.system_prompt.domain_prompt_builder import DomainPromptBuilder
 from vanna.core.system_prompt import READ_ONLY_SYSTEM_PROMPT
 from vanna.core.lifecycle.query_logging_hook import QueryLoggingHook
-from vanna.core.enhancer.memory_enhancer import MemoryBasedEnhancer
+from vanna.core.enhancer import DefaultLlmContextEnhancer
 import domain_config
 
 # Database connection
@@ -403,11 +403,7 @@ prompt_builder = DomainPromptBuilder(
 )
 
 # Memory enhancement
-memory_enhancer = MemoryBasedEnhancer(
-    agent_memory=agent_memory,
-    max_examples=5,
-    similarity_threshold=0.7
-)
+memory_enhancer = DefaultLlmContextEnhancer(agent_memory)
 
 # Query logging
 query_logger = QueryLoggingHook(

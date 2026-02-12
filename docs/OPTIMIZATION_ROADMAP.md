@@ -53,17 +53,17 @@ Build a library of high-quality question-SQL pairs specific to your database sch
 ---
 
 ### ✅ Task 3: Enable LLM Context Enhancement
-**Status:** Planned
+**Status:** Complete
 **Timeline:** Day 3
 **Impact:** High - Dramatically improves accuracy
 
 Automatically inject relevant past queries into the LLM's context for every new question.
 
 **Implementation:**
-- Create `MemoryBasedEnhancer` class
-- Search memory for top 5 similar past queries
-- Inject examples into system prompt
-- LLM sees proven patterns before generating SQL
+- Uses upstream `DefaultLlmContextEnhancer(agent_memory)` from `vanna.core.enhancer`
+- Searches memory for relevant text memories based on user message
+- Injects matching context into system prompt before LLM call
+- No custom code needed — wired up in `run_web_ui.py`
 
 **Expected Impact:**
 - 40-60% reduction in hallucinated SQL
@@ -184,7 +184,7 @@ Track these KPIs to measure optimization effectiveness:
 - [x] Switch to ChromaDB persistent memory
 - [x] Create training data templates
 - [x] Seed memory with 20-30 examples
-- [x] Enable LLM context enhancement
+- [x] Enable LLM context enhancement (upstream `DefaultLlmContextEnhancer`)
 - [x] Add domain-specific system prompt
 - [x] Register memory tools
 
