@@ -19,6 +19,7 @@ chroma.sqlite3
 .coverage.*
 milvus.db
 .milvus.db.lock
+*temp_tree.txt
 
 # Vanna temp data (query result CSVs, chart artifacts)
 vanna_data/
