@@ -1,3 +1,4 @@
+.claude/settings.local.json
 build
 **.egg-info
 venn
@@ -6,7 +7,6 @@ tests/__pycache__
 __pycache__/
 .idea
 .coverage
-docs/*.html
 .ipynb_checkpoints/
 .tox/
 notebooks/chroma.sqlite3
@@ -19,10 +19,16 @@ chroma.sqlite3
 .coverage.*
 milvus.db
 .milvus.db.lock
+*temp_tree.txt
 
 # Vanna temp data (query result CSVs, chart artifacts)
 vanna_data/
 claude_data/
+
+# Vanna agent memory and logs
+vanna_memory/
+vanna_query_log.jsonl
+successful_queries.json
 
 # Frontend builds and dependencies
 frontends/**/node_modules/

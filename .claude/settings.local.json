@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:vanna.ai)"
+      "Bash(python run_web_ui.py:*)",
+      "Bash(ping:*)",
+      "Bash(python -m training.sample_query_library:*)",
+      "Bash(gh api:*)",
+      "Bash(findstr:*)",
+      "Bash(find:*)",
+      "Bash(ruff check:*)"
     ]
   }
 }

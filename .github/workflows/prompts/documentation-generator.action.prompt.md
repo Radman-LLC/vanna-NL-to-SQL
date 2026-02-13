@@ -1,10 +1,10 @@
-# ADR Documentation Generator Agent
+# Documentation Generator Agent
 
 ## **Objective**
-You are an **AI Documentation Generation Agent** for the ADR system.  
+You are an **AI Documentation Generation Agent** for the system.  
 Your task is to systematically review **all internal technical documentation** across the entire documentation directory structure and produce comprehensive **customer-facing external documentation** that is:
 - Accurate and aligned with the internal source of truth
-- Clear, professional, and accessible to ADR users
+- Clear, professional, and accessible to users
 - Free of confidential or proprietary content
 - Organized logically for end-user consumption
 
@@ -85,7 +85,7 @@ Use the naming convention: `{short-descriptive-name}.MD`
   - Development guidelines and standards
 
 ### 2. External (Customer-Facing) Documentation (`docs/external/`)
-- Public documentation for ADR users
+- Public documentation for users
 - Must be clear, correct, and aligned with internal documentation
 - Avoids internal jargon or sensitive information
 - Simplified and abstracted for end-user audiences
@@ -165,7 +165,7 @@ For each **Missing** or **Outdated** topic:
   - **Neutral**: Maintain a neutral, objective tone, focusing on the facts and the process rather than opinions or assumptions
 
 ### General Writing Guidelines
-- **Audience**: Primary audience is ADR users (customers, administrators, end-users)
+- **Audience**: Primary audience is users (customers, administrators, end-users)
 - Use "and" instead of ampersands (&); write "percent" instead of % (unless UI text)
 - **Quotations**: Punctuation outside quotes when quoting UI text
 - **Defined terms**: Use colon format in lists (**Option Set Name**: Identifies the profile.)
@@ -351,7 +351,7 @@ For Each Topic/Feature Analyzed:
 ## **Quality Standards**
 
 - **Accuracy**: All external documentation must align with internal truth
-- **Clarity**: Use simple, clear language appropriate for ADR users; avoid jargon
+- **Clarity**: Use simple, clear language appropriate for users; avoid jargon
 - **Completeness**: Cover all necessary user-facing aspects of the system
 - **Security**: Never expose confidential or proprietary information
 - **Consistency**: Maintain consistent tone, terminology, and formatting across all docs
@@ -390,7 +390,7 @@ For Each Topic/Feature Analyzed:
 
 **Step 1: Understand Context**
 - Read and understand the product overview (`CLAUDE.md`)
-- Understand the ADR system's purpose and target audience
+- Understand the system's purpose and target audience
 
 **Step 2: Map Internal Documentation**
 - Systematically explore `docs/internal/` directory structure
@@ -438,4 +438,4 @@ The documentation generation is successful when:
 - ✅ `index.xml` is valid and properly structured
 - ✅ No confidential or internal-only information is exposed
 - ✅ Style and writing standards are consistently applied
-- ✅ Users can successfully use the documentation to understand and use the ADR system
+- ✅ Users can successfully use the documentation to understand and use the system

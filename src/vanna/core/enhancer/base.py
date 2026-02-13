@@ -23,31 +23,13 @@ class LlmContextEnhancer(ABC):
     - Add temporal or environmental context
 
     Example:
-        class MemoryBasedEnhancer(LlmContextEnhancer):
-            def __init__(self, agent_memory):
-                self.agent_memory = agent_memory
-
-            async def enhance_system_prompt(
-                self,
-                system_prompt: str,
-                user_message: str,
-                user: User
-            ) -> str:
-                # Add relevant examples from memory based on user message
-                examples = await self.agent_memory.search_similar(user_message)
-                return system_prompt + "\\n\\nRelevant examples:\\n" + examples
-
-            async def enhance_user_messages(
-                self,
-                messages: list[LlmMessage],
-                user: User
-            ) -> list[LlmMessage]:
-                # Could modify or add to messages
-                return messages
+        See ``DefaultLlmContextEnhancer`` for the built-in implementation that
+        searches ``AgentMemory`` for relevant context and injects it into the
+        system prompt.
 
         agent = Agent(
             llm_service=...,
-            llm_context_enhancer=MemoryBasedEnhancer(agent_memory)
+            llm_context_enhancer=DefaultLlmContextEnhancer(agent_memory)
         )
     """
 

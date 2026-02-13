@@ -40,6 +40,10 @@ tox -e mypy
 
 # All checks at once
 tox -e ruff && tox -e mypy && tox -e py311-unit
+
+# Training data seeding (ChromaDB)
+python -m training.seed_agent_memory --clear --verify     # Re-seed with verification
+python -m training.sample_query_library                   # Check training pairs count/categories
 ```
 
 ## Architecture
@@ -128,6 +132,27 @@ Follow SOLID principles to keep the codebase modular and maintainable.
 - **Liskov Substitution (L)**: Any subclass must be usable wherever its parent is expected. If `ReadOnlyMySQLRunner` implements `SqlRunner`, it must honor the `run_sql()` contract (accept `RunSqlToolArgs`, return `pd.DataFrame`). Don't add preconditions or change return types that would break callers.
 - **Interface Segregation (I)**: Don't force classes to implement methods they don't need. The codebase already follows this — `SqlRunner`, `AgentMemory`, and `LlmService` are separate interfaces rather than one monolithic base class.
 - **Dependency Inversion (D)**: Depend on abstractions, not concrete implementations. `RunSqlTool` takes a `SqlRunner` (abstract), not a `MySQLRunner` (concrete). Agent setup code wires the concrete implementations; the tools themselves only know about interfaces.
+
+## Training Data (ChromaDB)
+
+Training data for NL-to-SQL lives in `training/` directory:
+
+- `training/sample_query_library.py` - Training pairs: `{"question": str, "sql": str, "category": str, "notes": str}`
+- `training/schema_documentation_template.md` - Schema docs (tables, relationships, business logic, SQL conventions)
+- `training/seed_agent_memory.py` - Seeding script that populates ChromaDB
+
+**Adding new training data:**
+1. Add training pairs to `TRAINING_PAIRS` list in `sample_query_library.py`
+2. Add table definitions/docs to `schema_documentation_template.md` (follow existing format)
+3. Run `python -m training.seed_agent_memory --clear --verify` to re-seed ChromaDB
+
+**Training pair format:**
+- `question` - Natural language question (what user would ask)
+- `sql` - Correct SQL query (multi-line string, properly formatted)
+- `category` - Query type (aggregation, join_aggregation, financial, commission_report, etc.)
+- `notes` - Key SQL patterns, filters, or gotchas to highlight
+
+**Important:** Use `--clear` flag when re-seeding - ChromaDB doesn't auto-update existing memories.
 
 ## Adding a New Tool
 

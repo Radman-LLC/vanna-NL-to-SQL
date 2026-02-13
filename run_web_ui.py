@@ -52,13 +52,23 @@ def create_agent():
     """Create and configure the Vanna Agent with all 4 read-only defense layers."""
     from vanna import Agent, AgentConfig
     from vanna.core.registry import ToolRegistry
-    from vanna.core.system_prompt import DefaultSystemPromptBuilder
+    from vanna.core.system_prompt.domain_prompt_builder import DomainPromptBuilder
     from vanna.core.user import UserResolver, User, RequestContext
     from vanna.integrations.anthropic import AnthropicLlmService
     from vanna.integrations.local import LocalFileSystem
-    from vanna.integrations.local.agent_memory import DemoAgentMemory
+    from vanna.integrations.chromadb import ChromaAgentMemory
     from vanna.integrations.mysql import ReadOnlyMySQLRunner
     from vanna.tools import RunSqlTool, VisualizeDataTool
+    from vanna.tools.agent_memory import (
+        SaveQuestionToolArgsTool,
+        SearchSavedCorrectToolUsesTool,
+        SaveTextMemoryTool
+    )
+    from vanna.core.enhancer import DefaultLlmContextEnhancer
+    from vanna.core.lifecycle.query_logging_hook import QueryLoggingHook
+
+    # Import domain-specific configuration
+    import domain_config
 
     # ── Layers 1 & 2: ReadOnlyMySQLRunner ────────────────────────────────
     # Layer 1: SQL parsing — validates every query with sqlparse before
@@ -107,6 +117,31 @@ def create_agent():
         VisualizeDataTool(file_system=file_system), access_groups=[]
     )
 
+    # Agent memory tools — enable continuous learning from successful queries.
+    # Users can explicitly save good queries during chat sessions, and the agent
+    # can search its memory for similar past queries to improve future responses.
+
+    # SaveQuestionToolArgsTool — saves successful question-SQL patterns
+    # Only admins can save to prevent memory pollution from incorrect queries
+    tools.register_local_tool(
+        SaveQuestionToolArgsTool(),
+        access_groups=["admin"]
+    )
+
+    # SearchSavedCorrectToolUsesTool — searches memory for similar queries
+    # All users can search memory to see what patterns have worked before
+    tools.register_local_tool(
+        SearchSavedCorrectToolUsesTool(),
+        access_groups=[]  # Available to all users
+    )
+
+    # SaveTextMemoryTool — saves free-form insights and documentation
+    # Only admins can save text memories (e.g., schema changes, new business rules)
+    tools.register_local_tool(
+        SaveTextMemoryTool(),
+        access_groups=["admin"]
+    )
+
     # Simple user resolver — extracts email from the vanna_email cookie set
     # by the web UI's demo login form. Falls back to "dev@local" if no
     # cookie is present (e.g., during development/testing).
@@ -116,15 +151,53 @@ def create_agent():
             group = "admin" if email == "admin@example.com" else "user"
             return User(id=email, email=email, group_memberships=[group])
 
+    # Persistent agent memory using ChromaDB — survives server restarts and
+    # enables the agent to learn from successful queries over time. The embeddings
+    # allow semantic search for similar past queries, improving accuracy.
+    agent_memory = ChromaAgentMemory(
+        persist_directory="./vanna_memory",
+        collection_name="mysql_queries"
+    )
+
+    # Use upstream DefaultLlmContextEnhancer to automatically inject relevant
+    # past queries from ChromaDB memory into the LLM's system prompt. This
+    # searches for similar past questions and adds proven SQL patterns as context.
+    context_enhancer = DefaultLlmContextEnhancer(agent_memory)
+
+    # Domain-specific system prompt builder — combines read-only rules with
+    # database-specific knowledge from domain_config.py. This tells Claude about
+    # your business definitions, SQL patterns, performance considerations, and
+    # data quality issues, resulting in much more accurate SQL generation.
+    # Customize domain_config.py to match your specific database and domain.
+    system_prompt_builder = DomainPromptBuilder(
+        base_prompt=READ_ONLY_SYSTEM_PROMPT,
+        database_type=domain_config.DATABASE_INFO.get("type"),
+        database_purpose=domain_config.DATABASE_INFO.get("purpose"),
+        business_definitions=domain_config.BUSINESS_DEFINITIONS,
+        sql_patterns=domain_config.SQL_PATTERNS,
+        performance_hints=domain_config.PERFORMANCE_HINTS,
+        data_quality_notes=domain_config.DATA_QUALITY_NOTES,
+        additional_context=domain_config.ADDITIONAL_CONTEXT
+    )
+
+    # Query logging hook — tracks all SQL queries for monitoring and analytics.
+    # Logs are written to vanna_query_log.jsonl as JSON lines for easy parsing.
+    # Use this to identify failing queries, track usage patterns, and export
+    # successful queries for expanding your training data.
+    query_logger = QueryLoggingHook(
+        log_file="./vanna_query_log.jsonl",
+        log_all_tools=False,  # Only log SQL queries, not other tool executions
+        include_result_preview=False  # Set to True to include result snippets
+    )
+
     return Agent(
         llm_service=llm,
         tool_registry=tools,
         user_resolver=SimpleUserResolver(),
-        agent_memory=DemoAgentMemory(),  # In-memory store — resets on restart
-        # Layer 4: Override default system prompt with our read-only version
-        system_prompt_builder=DefaultSystemPromptBuilder(
-            base_prompt=READ_ONLY_SYSTEM_PROMPT
-        ),
+        agent_memory=agent_memory,
+        llm_context_enhancer=context_enhancer,
+        system_prompt_builder=system_prompt_builder,
+        lifecycle_hooks=[query_logger],
     )
 
 
