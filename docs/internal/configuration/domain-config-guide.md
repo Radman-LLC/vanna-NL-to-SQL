@@ -556,6 +556,8 @@ elif ENV == "staging":
 
 ## Related Documentation
 
-- `domain-prompt-builder.md` - How DomainPromptBuilder uses this config
-- `IMPLEMENTATION_SUMMARY.md` - Overview of domain prompt feature
-- `OPTIMIZATION_ROADMAP.md` - Domain prompts are Task 4 in the roadmap
+- `docs/internal/configuration/domain-prompt-builder.md` - How `DomainPromptBuilder` uses this config
+- `docs/internal/training/memory-training.md` - Training data and agent memory optimization
+- `docs/OPTIMIZATION_ROADMAP.md` - Development roadmap (domain prompts are Priority 1, Task 4)
+- `src/vanna/core/system_prompt/domain_prompt_builder.py` - Implementation source code
+- `src/vanna/core/system_prompt/memory_instructions.py` - Memory workflow instructions auto-included by the builder

@@ -82,13 +82,33 @@ The builder constructs the final system prompt by combining sections:
 
 1. **Base Prompt** - Core instructions and read-only rules
 2. **Database Information** - Type and purpose
-3. **Business Definitions** - Domain-specific terms
-4. **SQL Best Practices** - Patterns and conventions
-5. **Performance Considerations** - Optimization hints
-6. **Data Quality Notes** - Edge cases and gotchas
-7. **Additional Context** - Free-form custom content
+3. **Business Definitions** - Domain-specific terms (rendered as bold key-value pairs)
+4. **SQL Best Practices** - Patterns and conventions (numbered list)
+5. **Performance Considerations** - Optimization hints (numbered list)
+6. **Data Quality Notes** - Edge cases and gotchas (numbered list)
+7. **Memory Workflow Instructions** - Auto-included when memory tools are registered
+8. **Additional Context** - Free-form custom content
 
 Sections are only included if they have content (empty sections are skipped).
+
+### Memory Workflow Auto-Inclusion
+
+When memory tools (`search_saved_correct_tool_uses`, `save_question_tool_args`, `save_text_memory`) are registered in the tool list, `DomainPromptBuilder` automatically appends memory workflow instructions to the system prompt. This is handled by the shared `build_memory_workflow_instructions()` function from `src/vanna/core/system_prompt/memory_instructions.py`.
+
+Without these instructions, the LLM would not know to:
+- Search memory for similar queries before generating SQL
+- Save successful queries for future reference
+
+### Internal Helper: `_build_list_section()`
+
+The `_build_list_section()` method consolidates the repeated pattern used by business definitions, SQL patterns, performance hints, and data quality notes. It accepts:
+
+- `header`: Section header (e.g., `"SQL BEST PRACTICES FOR THIS DATABASE:"`)
+- `intro`: Introductory sentence below the header
+- `items`: List of items to display
+- `numbered`: If `True`, prefix items with `1. 2. 3.` etc. If `False`, items are included as-is
+
+Business definitions use `numbered=False` since they are already formatted as bold key-value pairs. All other sections use `numbered=True`.
 
 ### Integration
 
@@ -479,6 +499,14 @@ from vanna.core.system_prompt import READ_ONLY_SYSTEM_PROMPT
 
 prompt_builder = create_example_snowflake_prompt(READ_ONLY_SYSTEM_PROMPT)
 ```
+
+## Related Architecture
+
+- **`SystemPromptBuilder`** (`src/vanna/core/system_prompt/base.py`) - Abstract base class that `DomainPromptBuilder` implements
+- **`DefaultSystemPromptBuilder`** (`src/vanna/core/system_prompt/default.py`) - Simpler alternative without domain knowledge
+- **`memory_instructions`** (`src/vanna/core/system_prompt/memory_instructions.py`) - Shared module for memory workflow instructions, used by both `DomainPromptBuilder` and `DefaultSystemPromptBuilder`
+- **`LlmContextEnhancer`** (`src/vanna/core/enhancer/`) - Complements the system prompt by injecting RAG-based context from AgentMemory at runtime
+- **`domain_config.py`** (project root) - Configuration file containing domain knowledge
 
 ## Future Enhancements
 

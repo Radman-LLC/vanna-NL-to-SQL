@@ -119,16 +119,43 @@ Your training pairs should span these categories:
 - **filtering** - Complex WHERE clauses with multiple conditions
 - **complex** - Advanced queries with subqueries, CTEs, CASE statements
 
+## Memory Types
+
+AgentMemory supports two distinct memory types:
+
+### ToolMemory (Structured)
+Stores structured tool usage patterns with question, tool_name, arguments, success status, and timestamp. Created via `save_tool_usage()`. Used for tracking which tools were called and with what arguments for a given question.
+
+### TextMemory (Free-form)
+Stores free-form text content (schema documentation, business rules, SQL patterns). Created via `save_text_memory()`. This is what the seeding script uses to store schema documentation and training pair context.
+
+**Key difference:** ToolMemory tracks structured tool executions. TextMemory stores knowledge that the `DefaultLlmContextEnhancer` searches for RAG-based context injection.
+
 ## How Memory Improves Accuracy
 
-When you ask a question, the agent:
+When you ask a question, the agent uses **two complementary mechanisms**:
 
-1. **Searches memory** for similar past questions using semantic similarity
-2. **Retrieves top 5 matches** with their proven SQL queries
-3. **Injects examples** into the LLM context as reference patterns
-4. **Generates SQL** informed by similar successful queries
+### 1. System Prompt Enhancement (DefaultLlmContextEnhancer)
+The `DefaultLlmContextEnhancer` (`src/vanna/core/enhancer/default.py`) runs before each LLM call:
 
-This dramatically reduces:
+1. **Searches TextMemory** for relevant content using semantic similarity (`search_text_memories()`)
+2. **Retrieves top 5 matches** from ChromaDB
+3. **Appends context** to the system prompt under "Relevant Context from Memory"
+4. **LLM sees domain knowledge** alongside the user's question
+
+This is automatic when the agent has an `llm_context_enhancer` configured (which it is by default via `DefaultLlmContextEnhancer(agent_memory)`).
+
+### 2. Memory Tool Workflow (Agent Memory Tools)
+When memory tools are registered, the LLM can also:
+
+1. **Call `search_saved_correct_tool_uses`** to find similar past queries with their SQL
+2. **Use those patterns** to inform its SQL generation
+3. **Call `save_question_tool_args`** after successful execution to save the pattern for future use
+
+This provides both automatic (enhancer) and explicit (tool-based) memory retrieval.
+
+### Combined Effect
+Together, these dramatically reduce:
 - Hallucinated table/column names
 - Incorrect JOIN patterns
 - Missing business logic filters (is_test = FALSE, etc.)
@@ -186,6 +213,31 @@ ls -la vanna_memory/
 - Increase training pairs (aim for 30-50)
 - Use more diverse question phrasings
 - Lower similarity_threshold in searches
+
+## AgentMemory ABC Reference
+
+The `AgentMemory` abstract base class (`src/vanna/capabilities/agent_memory/base.py`) defines these core methods:
+
+| Method | Purpose |
+|--------|---------|
+| `save_tool_usage()` | Save structured tool usage pattern (question + tool + args + success) |
+| `save_text_memory()` | Save free-form text content (schema docs, business rules) |
+| `search_similar_usage()` | Search for similar tool usage patterns by semantic similarity |
+| `search_text_memories()` | Search for similar text memories by semantic similarity |
+| `get_recent_memories()` | Get recent tool usage patterns |
+| `get_recent_text_memories()` | Get recent text memories |
+| `delete_by_id()` | Delete a specific tool memory |
+| `delete_text_memory()` | Delete a specific text memory |
+| `clear_memories()` | Bulk delete memories (optionally filtered by tool_name or date) |
+
+**Implementations:** ChromaDB (`src/vanna/integrations/chromadb/`), Qdrant, FAISS, Pinecone, Weaviate, Milvus, Marqo, OpenSearch, Azure Search.
+
+## Related Documentation
+
+- `docs/internal/configuration/domain-config-guide.md` - Domain configuration for system prompts
+- `docs/internal/configuration/domain-prompt-builder.md` - System prompt builder with domain knowledge
+- `docs/internal/operations/query-logging-hook.md` - Query logging for monitoring and training data export
+- `src/vanna/core/enhancer/default.py` - DefaultLlmContextEnhancer implementation
 
 ## Next Steps
 
